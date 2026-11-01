@@ -820,22 +820,37 @@ export default function App() {
     });
   }, [nextTier]);
 
-  // Responsive scaling calculation so the 420x620 chamber fits any screen with zero scroll
+  // Responsive scaling calculation using ResizeObserver so the 420x620 chamber fits any screen size cleanly
   useEffect(() => {
+    const el = stageWrapperRef.current;
+    if (!el) return;
+
     const updateScale = () => {
-      if (!stageWrapperRef.current) return;
-      const rect = stageWrapperRef.current.getBoundingClientRect();
-      const padX = 12;
-      const padY = 12;
-      const availW = Math.max(240, rect.width - padX);
-      const availH = Math.max(320, rect.height - padY);
-      const scale = Math.min(1, availW / BOX_WIDTH, availH / BOX_HEIGHT);
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const isMobile = window.innerWidth < 640;
+      const padX = isMobile ? 8 : 16;
+      // Reserve 34px on mobile/tablet for the external Next/Current status header bar above the chamber
+      const headerBarOffset = window.innerWidth < 1024 ? 36 : 0;
+      const padY = (isMobile ? 8 : 16) + headerBarOffset;
+
+      const availW = Math.max(200, rect.width - padX);
+      const availH = Math.max(260, rect.height - padY);
+      const scale = Math.min(1.15, availW / BOX_WIDTH, availH / BOX_HEIGHT);
       setChamberScale(scale);
     };
 
     updateScale();
+    const observer = new ResizeObserver(() => {
+      updateScale();
+    });
+    observer.observe(el);
     window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
   }, []);
 
   // Helper to add points and update High Score
@@ -1703,7 +1718,7 @@ export default function App() {
   const currentOrbInfo = ORB_TIERS[currentTier - 1] || ORB_TIERS[0];
 
   return (
-    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0c10] text-slate-100 flex flex-col justify-between select-none">
+    <div className="relative h-dvh w-full max-w-[100vw] overflow-hidden bg-[#0b0c10] text-slate-100 flex flex-col justify-between select-none">
       {/* Ambient Deep Space Radial Illumination */}
       <div
         className="pointer-events-none fixed inset-0 opacity-35"
@@ -1716,26 +1731,28 @@ export default function App() {
       {/* ====================================================================
           TOP NAVIGATION & TELEMETRY BAR (3-Zone Contract)
          ==================================================================== */}
-      <header className="relative z-20 flex items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-3 border-b border-slate-800/80 bg-[#0b0c10]/80 backdrop-blur-md shrink-0">
+      <header className="relative z-20 w-full flex items-center justify-between gap-2 sm:gap-4 px-2.5 py-2 sm:px-6 sm:py-3 border-b border-slate-800/80 bg-[#0b0c10]/85 backdrop-blur-md shrink-0">
         {/* Zone 1: Brand Wordmark */}
-        <div className="flex items-center gap-2.5 whitespace-nowrap shrink-0">
+        <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
           <div
-            className="w-3.5 h-3.5 rounded-full shrink-0"
+            className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full shrink-0"
             style={{
               background: 'radial-gradient(circle at 30% 30%, #ffffff, #00f5d4)',
-              boxShadow: '0 0 12px #00f5d4',
+              boxShadow: '0 0 10px #00f5d4',
             }}
           />
-          <span className="font-display text-base sm:text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0">
+          <span className="font-display text-sm sm:text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0">
             Space Dust
           </span>
         </div>
 
         {/* Zone 2: Live Score & High Score Readout */}
-        <div className="flex items-center gap-4 sm:gap-8 text-xs sm:text-sm">
-          <div className="flex items-baseline gap-2 whitespace-nowrap shrink-0">
-            <span className="text-slate-400 font-medium">Score</span>
-            <span className="font-mono-num text-base sm:text-xl font-bold text-[#00f5d4]">
+        <div className="flex items-center gap-2 sm:gap-6 text-xs sm:text-sm bg-slate-900/60 border border-slate-800/80 rounded-lg px-2.5 py-1 sm:bg-transparent sm:border-0 sm:p-0">
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap shrink-0">
+            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
+              Score
+            </span>
+            <span className="font-mono-num text-sm sm:text-xl font-bold text-[#00f5d4]">
               {displayScore.toLocaleString()}
             </span>
           </div>
@@ -1744,30 +1761,32 @@ export default function App() {
             ·
           </span>
 
-          <div className="flex items-baseline gap-2 whitespace-nowrap shrink-0">
-            <span className="text-slate-400 font-medium">Best</span>
-            <span className="font-mono-num text-base sm:text-xl font-bold text-amber-400">
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap shrink-0">
+            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
+              Best
+            </span>
+            <span className="font-mono-num text-sm sm:text-xl font-bold text-amber-400">
               {highScore.toLocaleString()}
             </span>
           </div>
 
           {comboCount > 1 && (
             <>
-              <span className="hidden sm:inline text-slate-700" aria-hidden="true">
+              <span className="hidden md:inline text-slate-700" aria-hidden="true">
                 ·
               </span>
-              <span className="hidden sm:inline font-mono-num text-xs font-bold text-[#f15bb5] whitespace-nowrap shrink-0">
-                {comboCount}x Combo Active
+              <span className="hidden md:inline font-mono-num text-xs font-bold text-[#f15bb5] whitespace-nowrap shrink-0">
+                {comboCount}x Combo
               </span>
             </>
           )}
         </div>
 
         {/* Zone 3: Primary Controls (Audio Mute, Rules, Reset) */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setShowHelpModal(true)}
-            className="p-2 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
             title="How to Play"
             aria-label="How to Play"
           >
@@ -1775,7 +1794,7 @@ export default function App() {
           </button>
           <button
             onClick={handleToggleMute}
-            className="p-2 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
             title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
             aria-label={isMuted ? 'Unmute Audio' : 'Mute Audio'}
           >
@@ -1787,18 +1806,20 @@ export default function App() {
           </button>
           <button
             onClick={handleResetGame}
-            className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900/70 text-xs font-semibold text-slate-200 hover:text-white hover:border-slate-700 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 bg-slate-900/70 text-xs font-semibold text-slate-200 hover:text-white hover:border-slate-700 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            title="Restart Game"
+            aria-label="Restart Game"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Restart</span>
           </button>
         </div>
       </header>
 
       {/* ====================================================================
-          MAIN WORKSPACE (3-COLUMN DESKTOP / COMPACT VERTICAL MOBILE)
+          MAIN WORKSPACE (3-COLUMN DESKTOP / FULL-STAGE MOBILE)
          ==================================================================== */}
-      <main className="relative z-10 flex-1 min-h-0 w-full max-w-[1380px] mx-auto px-3 sm:px-6 py-2 flex flex-col lg:grid lg:grid-cols-12 gap-3 lg:gap-6 items-center justify-center">
+      <main className="relative z-10 flex-1 min-h-0 w-full max-w-[1380px] mx-auto px-1 sm:px-6 py-1 sm:py-2 flex flex-col lg:grid lg:grid-cols-12 gap-2 lg:gap-6 items-center justify-center overflow-hidden">
         {/* LEFT COLUMN (Desktop Telemetry & Controls Guide) */}
         <aside className="hidden lg:flex lg:col-span-3 flex-col gap-4 w-full self-center">
           <div className="rounded-2xl border border-slate-800/90 bg-slate-900/45 backdrop-blur-md p-5 flex flex-col gap-4">
@@ -1908,51 +1929,77 @@ export default function App() {
         {/* CENTER COLUMN: CONTAINMENT CHAMBER CANVAS */}
         <section
           ref={stageWrapperRef}
-          className="lg:col-span-6 flex-1 min-h-0 w-full h-full flex items-center justify-center relative"
+          className="lg:col-span-6 flex-1 min-h-0 w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
         >
+          {/* External Mobile/Tablet Chamber Header Bar (Prevents overlapping the top drop zone!) */}
+          <div
+            style={{ width: `${Math.round(BOX_WIDTH * chamberScale)}px` }}
+            className="lg:hidden flex items-center justify-between px-3 py-1 mb-1 rounded-t-xl bg-slate-900/80 border border-slate-800/90 text-xs shrink-0"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-slate-400">Now:</span>
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  backgroundColor: currentOrbInfo.color,
+                  boxShadow: `0 0 6px ${currentOrbInfo.color}`,
+                }}
+              />
+              <span className="font-semibold text-white truncate">
+                {currentOrbInfo.name}
+              </span>
+            </div>
+
+            {comboCount > 1 && (
+              <span className="font-mono-num text-[11px] font-bold text-[#f15bb5] shrink-0">
+                {comboCount}x COMBO!
+              </span>
+            )}
+
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-slate-400">Next:</span>
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  backgroundColor: nextOrbInfo.color,
+                  boxShadow: `0 0 6px ${nextOrbInfo.color}`,
+                }}
+              />
+              <span className="font-semibold text-white truncate">
+                {nextOrbInfo.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Exact-Sized Scaled Chamber Container (Never overflows parent width) */}
           <div
             style={{
-              width: `${BOX_WIDTH * chamberScale}px`,
-              height: `${BOX_HEIGHT * chamberScale}px`,
+              width: `${Math.round(BOX_WIDTH * chamberScale)}px`,
+              height: `${Math.round(BOX_HEIGHT * chamberScale)}px`,
             }}
-            className="relative flex items-center justify-center"
+            className="relative shrink-0 overflow-hidden rounded-b-2xl"
           >
             <div
               style={{
                 width: `${BOX_WIDTH}px`,
                 height: `${BOX_HEIGHT}px`,
                 transform: `scale(${chamberScale})`,
-                transformOrigin: 'center center',
+                transformOrigin: 'top left',
               }}
-              className={`relative rounded-b-2xl border-x-2 border-b-2 transition-colors duration-200 bg-slate-950/75 backdrop-blur-md shadow-[0_0_40px_rgba(0,245,212,0.08)] overflow-hidden ${
+              className={`absolute top-0 left-0 rounded-b-2xl border-x-2 border-b-2 transition-colors duration-200 bg-slate-950/80 backdrop-blur-md shadow-[0_0_40px_rgba(0,245,212,0.08)] overflow-hidden ${
                 vaporizerMode
                   ? 'border-[#ff006e] shadow-[0_0_35px_rgba(255,0,110,0.28)]'
                   : dangerCountdown !== null
                   ? 'border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.35)]'
-                  : 'border-[#00f5d4]/45'
+                  : 'border-[#00f5d4]/50'
               }`}
             >
               {/* Top Rim Corner Accents */}
               <div className="pointer-events-none absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00f5d4]/60 via-transparent to-[#00f5d4]/60" />
 
-              {/* Compact Current / Next Indicator Overlay inside Top-Right of Chamber for Mobile */}
-              <div className="pointer-events-none absolute top-2.5 right-3 z-10 flex items-center gap-2 text-xs text-slate-300 bg-slate-900/75 border border-slate-800/90 rounded-lg px-2.5 py-1 backdrop-blur-sm">
-                <span className="text-slate-400">Next:</span>
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{
-                    backgroundColor: nextOrbInfo.color,
-                    boxShadow: `0 0 8px ${nextOrbInfo.color}`,
-                  }}
-                />
-                <span className="font-semibold text-white">
-                  {nextOrbInfo.name}
-                </span>
-              </div>
-
               {/* Vaporizer Active Targeting Banner */}
               {vaporizerMode && (
-                <div className="pointer-events-none absolute top-11 inset-x-6 z-20 rounded-lg bg-[#ff006e]/90 text-white px-3 py-1.5 text-center text-xs font-bold tracking-wide shadow-lg">
+                <div className="pointer-events-none absolute top-3 inset-x-6 z-20 rounded-lg bg-[#ff006e]/90 text-white px-3 py-1.5 text-center text-xs font-bold tracking-wide shadow-lg">
                   LASER TARGETING ACTIVE · TAP ANY ORB TO VAPORIZE
                 </div>
               )}
@@ -2067,22 +2114,22 @@ export default function App() {
       {/* ====================================================================
           BOTTOM BAR (MOBILE POWER-UPS + UNIVERSAL 9-ORB EVOLUTION GUIDE BAR)
          ==================================================================== */}
-      <footer className="relative z-20 border-t border-slate-800/80 bg-[#0b0c10]/90 backdrop-blur-md px-3 py-2 sm:px-6 sm:py-2.5 shrink-0">
-        <div className="max-w-[1380px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
+      <footer className="relative z-20 w-full border-t border-slate-800/80 bg-[#0b0c10]/90 backdrop-blur-md px-2.5 py-1.5 sm:px-6 sm:py-2.5 shrink-0">
+        <div className="max-w-[1380px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2.5">
           {/* Compact Power-Up Buttons (Always accessible on Mobile/Tablet, mirrored on Desktop) */}
           <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
             <button
               onClick={handleShakeBox}
               disabled={!canShake || isGameOver}
-              className={`flex-1 sm:flex-initial py-1.5 px-3.5 rounded-lg border text-xs font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex-1 sm:flex-initial py-1.5 px-2.5 sm:px-3.5 rounded-lg border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 canShake && !isGameOver
                   ? 'border-[#00f5d4]/45 bg-[#00f5d4]/10 hover:bg-[#00f5d4]/20 text-white'
                   : 'border-slate-800 bg-slate-900/50 text-slate-500 cursor-not-allowed'
               }`}
             >
-              <Zap className="w-3.5 h-3.5 text-[#00f5d4]" />
+              <Zap className="w-3.5 h-3.5 text-[#00f5d4] shrink-0" />
               <span>Shake Box</span>
-              <span className="font-mono-num text-[#00f5d4]">
+              <span className="font-mono-num text-[11px] text-[#00f5d4]">
                 ({freeShakeLeft > 0 ? 'Free' : `${SHAKE_COST}`})
               </span>
             </button>
@@ -2090,7 +2137,7 @@ export default function App() {
             <button
               onClick={handleToggleVaporizer}
               disabled={!canVaporize || isGameOver}
-              className={`flex-1 sm:flex-initial py-1.5 px-3.5 rounded-lg border text-xs font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex-1 sm:flex-initial py-1.5 px-2.5 sm:px-3.5 rounded-lg border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 vaporizerMode
                   ? 'border-[#ff006e] bg-[#ff006e]/25 text-white'
                   : canVaporize && !isGameOver
@@ -2098,21 +2145,21 @@ export default function App() {
                   : 'border-slate-800 bg-slate-900/50 text-slate-500 cursor-not-allowed'
               }`}
             >
-              <Crosshair className="w-3.5 h-3.5 text-[#ff006e]" />
+              <Crosshair className="w-3.5 h-3.5 text-[#ff006e] shrink-0" />
               <span>{vaporizerMode ? 'Cancel Laser' : 'Laser Vaporizer'}</span>
-              <span className="font-mono-num text-[#ff006e]">
+              <span className="font-mono-num text-[11px] text-[#ff006e]">
                 ({freeVaporizeLeft > 0 ? 'Free' : `${VAPORIZE_COST}`})
               </span>
             </button>
           </div>
 
           {/* 9-Tier Evolution Guide Bar (Smallest to Largest) */}
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 overflow-x-auto max-w-full py-0.5">
+          <div className="flex items-center justify-center gap-1 sm:gap-2 w-full sm:w-auto overflow-x-auto py-0.5">
             <span className="text-[11px] text-slate-400 font-medium hidden md:inline mr-1 whitespace-nowrap">
               Evolution Guide:
             </span>
             {ORB_TIERS.map((tier, idx) => {
-              const dotSize = 10 + idx * 1.8;
+              const dotSize = 8 + idx * 1.4;
               return (
                 <div
                   key={tier.tier}
@@ -2126,7 +2173,7 @@ export default function App() {
                         width: `${dotSize}px`,
                         height: `${dotSize}px`,
                         background: `radial-gradient(circle at 30% 30%, #ffffff, ${tier.color})`,
-                        boxShadow: `0 0 8px ${tier.color}`,
+                        boxShadow: `0 0 6px ${tier.color}`,
                       }}
                     />
                     <span className="text-[10px] text-slate-400 font-mono-num mt-0.5 hidden sm:inline">
@@ -2134,7 +2181,7 @@ export default function App() {
                     </span>
                   </div>
                   {idx < ORB_TIERS.length - 1 && (
-                    <span className="text-slate-700 text-[10px] select-none">
+                    <span className="text-slate-700 text-[9px] select-none">
                       ›
                     </span>
                   )}
