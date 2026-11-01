@@ -1,0 +1,6 @@
+{
+  "name": "Cosmic Merge: Neon Orbs",
+  "description": "A 2D physics-based cosmic drop-and-merge arcade game powered by Matter.js with 9 celestial orb tiers, combo multipliers, power-ups, and synthesized Web Audio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
