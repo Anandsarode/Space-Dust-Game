@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Matter from 'matter-js';
+import { Analytics } from '@vercel/analytics/next';
 import {
   Volume2,
   VolumeX,
@@ -745,6 +746,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nextOrbCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageWrapperRef = useRef<HTMLDivElement | null>(null);
+  const mobileHeaderRef = useRef<HTMLDivElement | null>(null);
 
   const engineRef = useRef<Matter.Engine | null>(null);
   const scoreRef = useRef<number>(0);
@@ -820,24 +822,58 @@ export default function App() {
     });
   }, [nextTier]);
 
-  // Responsive scaling calculation using ResizeObserver so the 420x620 chamber fits any screen size cleanly
+  // Dynamic viewBox & aspect-ratio lock calculation for extreme portrait, narrow, or landscape viewports
   useEffect(() => {
     const el = stageWrapperRef.current;
     if (!el) return;
 
+    const TARGET_ASPECT = BOX_WIDTH / BOX_HEIGHT; // 420 / 620 (~0.6774)
+
     const updateScale = () => {
       const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const isMobile = window.innerWidth < 640;
-      const padX = isMobile ? 8 : 16;
-      // Reserve 34px on mobile/tablet for the external Next/Current status header bar above the chamber
-      const headerBarOffset = window.innerWidth < 1024 ? 36 : 0;
-      const padY = (isMobile ? 8 : 16) + headerBarOffset;
+      if (rect.width <= 0 || rect.height <= 0) return;
 
-      const availW = Math.max(200, rect.width - padX);
-      const availH = Math.max(260, rect.height - padY);
-      const scale = Math.min(1.15, availW / BOX_WIDTH, availH / BOX_HEIGHT);
-      setChamberScale(scale);
+      const vw = window.visualViewport?.width ?? window.innerWidth;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const isCompactScreen = vw < 1024;
+      const isNarrowMobile = vw < 400;
+      const isShortViewport = vh < 640 || rect.height < 460;
+
+      // Measure actual rendered height of the mobile status header bar (plus 4px bottom gap)
+      let headerBarOffset = 0;
+      if (isCompactScreen && mobileHeaderRef.current) {
+        const headerRect = mobileHeaderRef.current.getBoundingClientRect();
+        headerBarOffset = headerRect.height > 0 ? headerRect.height + 6 : 32;
+      }
+
+      // Adaptive padding based on extreme aspect ratios to prevent clipping on narrow or short screens
+      const padX = isNarrowMobile ? 4 : vw < 640 ? 8 : 16;
+      const padY = (isShortViewport ? 4 : vw < 640 ? 8 : 14) + headerBarOffset;
+
+      const availW = Math.max(80, rect.width - padX);
+      const availH = Math.max(120, rect.height - padY);
+      const containerAspect = availW / availH;
+
+      // ViewBox-style containment: preserve exact 420:620 aspect ratio across any orientation
+      let fittedW: number;
+      let fittedH: number;
+      if (containerAspect > TARGET_ASPECT) {
+        // Stage is wider than 420:620 (e.g. desktop, tablet, or landscape mobile) -> height-constrained
+        fittedH = availH;
+        fittedW = fittedH * TARGET_ASPECT;
+      } else {
+        // Stage is narrower/taller than 420:620 (e.g. tall 20:9 / 21:9 mobile portrait) -> width-constrained
+        fittedW = availW;
+        fittedH = fittedW / TARGET_ASPECT;
+      }
+
+      // Clamp scale so it never overflows the available stage box or scales unreasonably large on 4K displays
+      const nextScale = Math.min(
+        1.15,
+        fittedW / BOX_WIDTH,
+        fittedH / BOX_HEIGHT
+      );
+      setChamberScale(Math.max(0.25, Number(nextScale.toFixed(4))));
     };
 
     updateScale();
@@ -846,10 +882,14 @@ export default function App() {
     });
     observer.observe(el);
     window.addEventListener('resize', updateScale);
+    window.addEventListener('orientationchange', updateScale);
+    window.visualViewport?.addEventListener('resize', updateScale);
 
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', updateScale);
+      window.removeEventListener('orientationchange', updateScale);
+      window.visualViewport?.removeEventListener('resize', updateScale);
     };
   }, []);
 
@@ -1933,8 +1973,9 @@ export default function App() {
         >
           {/* External Mobile/Tablet Chamber Header Bar (Prevents overlapping the top drop zone!) */}
           <div
-            style={{ width: `${Math.round(BOX_WIDTH * chamberScale)}px` }}
-            className="lg:hidden flex items-center justify-between px-3 py-1 mb-1 rounded-t-xl bg-slate-900/80 border border-slate-800/90 text-xs shrink-0"
+            ref={mobileHeaderRef}
+            style={{ width: `${Math.floor(BOX_WIDTH * chamberScale)}px` }}
+            className="lg:hidden flex items-center justify-between px-3 py-1 mb-1 rounded-t-xl bg-slate-900/80 border border-slate-800/90 text-xs shrink-0 max-w-full"
           >
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-slate-400">Now:</span>
@@ -1971,13 +2012,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Exact-Sized Scaled Chamber Container (Never overflows parent width) */}
+          {/* Exact-Sized ViewBox Aspect-Ratio Locked Chamber Container */}
           <div
             style={{
-              width: `${Math.round(BOX_WIDTH * chamberScale)}px`,
-              height: `${Math.round(BOX_HEIGHT * chamberScale)}px`,
+              width: `${Math.floor(BOX_WIDTH * chamberScale)}px`,
+              height: `${Math.floor(BOX_HEIGHT * chamberScale)}px`,
+              aspectRatio: `${BOX_WIDTH} / ${BOX_HEIGHT}`,
             }}
-            className="relative shrink-0 overflow-hidden rounded-b-2xl"
+            className="relative shrink-0 overflow-hidden rounded-b-2xl max-w-full max-h-full"
           >
             <div
               style={{
@@ -2320,6 +2362,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Analytics />
     </div>
   );
 }
